@@ -20,6 +20,8 @@ function decodeJwtPayload(token) {
   }
 }
 
+
+
 function tokenExpiryMs(token) {
   const payload = decodeJwtPayload(token);
   if (!payload || typeof payload.exp !== "number") {
@@ -69,7 +71,7 @@ function triggerUnauthorized(reason) {
     try {
       onUnauthorizedHandler(reason);
     } catch {
-      // ignore handler errors
+      // ignore handler erro
     }
   }
 }

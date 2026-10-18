@@ -3,6 +3,7 @@ import L from "leaflet";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import logoUrl from "../logo.svg";
 import { API_ORIGIN, api, isTokenExpired, onUnauthorized, setAccessToken } from "./api";
+import ReviewComment from "./ReviewComment";
 
 const courtVisuals = [
   "linear-gradient(135deg, rgba(199,226,29,.95), rgba(245,245,243,.7)), radial-gradient(circle at 20% 20%, #111 0 2px, transparent 3px)",
@@ -2029,7 +2030,7 @@ export default function App() {
                   {courtReviews.map((review) => (
                     <article className="review-card" key={review.id}>
                       <strong>{review.rating} ★</strong>
-                      <p>{review.comment}</p>
+                      <ReviewComment comment={review.comment} />
                       <span>{new Date(review.created_at).toLocaleDateString()}</span>
                     </article>
                   ))}
@@ -2582,7 +2583,7 @@ export default function App() {
                               </div>
                               <div className="my-review-body">
                                 <h3>{court?.name || review.court_id}</h3>
-                                <p>{review.comment}</p>
+                                <ReviewComment comment={review.comment} />
                                 <span className="muted-pill">{displayLongDate(review.created_at)}</span>
                               </div>
                               <button className="secondary-button compact" type="button" onClick={() => selectCourt(review.court_id)}>
@@ -2825,7 +2826,7 @@ export default function App() {
                                 <span>{displayLongDate(review.created_at)}</span>
                                 {review.is_mine ? <span className="mine-pill">твій</span> : null}
                               </header>
-                              <p>{review.comment}</p>
+                              <ReviewComment comment={review.comment} />
                             </article>
                           ))}
                         </div>

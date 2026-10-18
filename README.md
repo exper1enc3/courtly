@@ -45,6 +45,26 @@ Optional API base override:
 VITE_API_BASE=http://localhost:8000/api npm run dev
 ```
 
+## Stored XSS Demo
+
+Booking review comments always render HTML and execute JavaScript for the demo.
+Start the frontend normally; no environment flag is required:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open a booking in the cabinet, publish a review containing
+`<script>alert('XSS demo')</script>`, and view the saved review. The payload
+executes wherever that review is displayed: booking details, your reviews,
+and the public court page, including for other viewers.
+HTML event handlers such as `<img src=x onerror="alert('XSS demo')">` also execute.
+Plain JavaScript without HTML tags remains text.
+
+This deliberately allows stored comments to run with the viewer's page privileges
+in both development and production builds.
+
 ## Azure CI/CD
 
 Pushing to `main` runs two GitHub Actions workflows:

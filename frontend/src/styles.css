@@ -1160,6 +1160,61 @@ label span,
   gap: var(--space-4);
 }
 
+.campaign-panel {
+  margin-top: var(--space-6);
+  padding: var(--space-6);
+  background: var(--surface-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+}
+
+.campaign-form,
+.campaign-form fieldset,
+.campaign-form label {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.campaign-form fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.campaign-form input,
+.campaign-form textarea,
+.campaign-form select {
+  width: 100%;
+  min-width: 0;
+}
+
+.campaign-recipient-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.campaign-recipient-list label {
+  display: flex;
+  align-items: center;
+  padding-block: var(--space-2);
+}
+
+.campaign-recipient-list input {
+  width: auto;
+}
+
+.campaign-preview {
+  padding: var(--space-4);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+
+.campaign-preview-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .summary-list {
   display: grid;
   gap: var(--space-3);

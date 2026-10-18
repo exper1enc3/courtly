@@ -58,6 +58,21 @@ Optional API base override:
 VITE_API_BASE=http://localhost:8000/api npm run dev
 ```
 
+## Email Campaigns
+
+Admins and superusers can compose email campaigns in Dashboard → Email кампанії.
+Choose all active users, all users, or specific users, then enter a subject and
+plain-text body. `{{name}}` inserts the recipient's full name in both fields.
+The preview uses the selected recipient.
+
+Sending requires `COURTLY_RESEND_API_KEY` and a verified `courtly.click` sender
+domain in Resend. Campaigns use `Courtly <noreply@courtly.click>` and send each
+personalized email to one recipient, in batches of up to 100. The result reports
+how many messages Resend accepted; this does not guarantee inbox delivery. If
+the provider fails partway through, the app reports the confirmed count and
+does not retry automatically, since a timeout can occur after acceptance.
+Campaign content, recipient IDs, and the result are recorded in the event log.
+
 ## Stored XSS Demo
 
 Requests sent through "Написати модератору" intentionally render HTML and execute

@@ -1,5 +1,8 @@
 import json
+import logging
+import re
 from collections import deque
+from time import sleep
 
 import resend
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,6 +19,7 @@ from app.models import Booking, Court, User
 from app.schemas import (
     BookingReminderRequest,
     EmailNotificationRequest,
+    EmailNotificationResponse,
     Message,
     TransferOwnershipRequest,
 )
@@ -23,6 +27,7 @@ from app.schemas import (
 router = APIRouter(prefix="/api/dashboard")
 event_logger = EventLogger()
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 def _manager_only(user: User) -> None:
@@ -99,16 +104,72 @@ def transfer_ownership(
     return Message(message="Transfer request accepted.")
 
 
-@router.post("/notifications/email", response_model=Message)
+def _personalize_campaign(template: str, recipient: User) -> str:
+    return re.sub(r"\{\{\s*name\s*\}\}", lambda _: recipient.full_name, template)
+
+
+@router.post("/notifications/email", response_model=EmailNotificationResponse)
 def send_email_notifications(
     payload: EmailNotificationRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> Message:
+) -> EmailNotificationResponse:
+    if user.role not in {"admin", "superuser"} or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
     enforce_policy(db, user, "/dashboard/notifications/email", "create")
-    # Placeholder dispatch; intended to be integrated with Resend provider.
-    event_logger.append("notifications.email_dispatched", user.id, payload.model_dump())
-    return Message(message="Notification campaign queued.")
+    query = select(User).order_by(User.id)
+    if payload.recipient_scope == "active_users":
+        query = query.where(User.is_active.is_(True))
+    elif payload.recipient_scope == "custom_segment":
+        if not payload.recipient_ids:
+            raise HTTPException(status_code=400, detail="Select at least one recipient")
+        query = query.where(User.id.in_(payload.recipient_ids))
+    recipients = list(db.scalars(query))
+    if payload.recipient_scope == "custom_segment" and len(recipients) != len(set(payload.recipient_ids)):
+        raise HTTPException(status_code=400, detail="Some selected users no longer exist")
+    if not recipients:
+        raise HTTPException(status_code=400, detail="No recipients match this audience")
+    if not settings.resend_api_key:
+        raise HTTPException(status_code=503, detail="Email provider is not configured")
+
+    resend.api_key = settings.resend_api_key
+    accepted_count = 0
+    for offset in range(0, len(recipients), 100):
+        if offset:
+            sleep(0.6)
+        batch = recipients[offset:offset + 100]
+        messages = [
+            {
+                "from": "Courtly <noreply@courtly.click>",
+                "to": [recipient.email],
+                "subject": _personalize_campaign(payload.subject, recipient),
+                "text": _personalize_campaign(payload.body, recipient),
+            }
+            for recipient in batch
+        ]
+        try:
+            response = resend.Batch.send(messages)
+            accepted_count += len(response["data"])
+            if len(response["data"]) != len(batch):
+                break
+        except Exception as exc:
+            # A timeout may happen after acceptance: never retry automatically.
+            logger.warning("Campaign batch at offset %d failed: %s", offset, type(exc).__name__)
+            break
+
+    complete = accepted_count == len(recipients)
+    result = EmailNotificationResponse(
+        message="Campaign accepted by email provider." if complete else "Email provider did not confirm the entire campaign. Do not retry blindly: some messages may already have been accepted.",
+        recipient_count=len(recipients),
+        accepted_count=accepted_count,
+        status="completed" if complete else "partial" if accepted_count else "failed",
+    )
+    event_logger.append(
+        "notifications.email_dispatched" if complete else "notifications.email_dispatch_incomplete",
+        user.id,
+        {**payload.model_dump(), **result.model_dump(), "recipient_ids": [recipient.id for recipient in recipients]},
+    )
+    return result
 
 
 @router.get("/bookings", response_model=list[dict])

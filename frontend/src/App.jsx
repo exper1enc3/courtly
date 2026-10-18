@@ -444,6 +444,16 @@ export default function App() {
   const [profileDraft, setProfileDraft] = useState(null);
   const [favorites, setFavorites] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
+  const [campaign, setCampaign] = useState({
+    subject: "",
+    body: "Привіт, {{name}}!\n\n",
+    recipient_scope: "active_users",
+    recipient_ids: []
+  });
+  const [campaignSending, setCampaignSending] = useState(false);
+  const campaignInFlight = useRef(false);
+  const [campaignResult, setCampaignResult] = useState(null);
+  const [campaignPreviewId, setCampaignPreviewId] = useState("");
   const [roles, setRoles] = useState([]);
   const [policies, setPolicies] = useState([]);
   const [permissionDrafts, setPermissionDrafts] = useState({});
@@ -1605,18 +1615,33 @@ export default function App() {
     }
   }
 
-  async function triggerNotification() {
+  async function triggerNotification(event) {
+    event.preventDefault();
+    if (campaignInFlight.current) return;
+    campaignInFlight.current = true;
+    setCampaignSending(true);
     setError("");
+    setCampaignResult(null);
     try {
-      const result = await api.sendNotification({
-        subject: "Courtly Campaign",
-        body: "System message from dashboard.",
-        recipient_scope: "active_users"
+      const confirmed = await askForConfirmation(`Надіслати кампанію «${campaign.subject}»? Одержувачів: ${campaignRecipients.length}.`, {
+        title: "Надіслати email кампанію",
+        confirmLabel: "Надіслати"
       });
-      addLog("Notification queued", result);
+      if (!confirmed) return;
+      const result = await api.sendNotification(campaign);
+      setCampaignResult(result);
+      addLog("Email campaign", result);
     } catch (err) {
       setError(err.message);
+    } finally {
+      campaignInFlight.current = false;
+      setCampaignSending(false);
     }
+  }
+
+  function updateCampaign(changes) {
+    setCampaign((current) => ({ ...current, ...changes }));
+    setCampaignResult(null);
   }
 
   async function triggerReplay() {
@@ -1731,6 +1756,14 @@ export default function App() {
   }
 
   const isCheckoutPage = view === "checkout" || view === "success";
+  const campaignRecipients = adminUsers.filter((user) =>
+    campaign.recipient_scope === "active_users" ? user.is_active :
+      campaign.recipient_scope === "custom_segment" ? campaign.recipient_ids.includes(user.id) : true
+  );
+  const campaignPreviewUser = campaignRecipients.find((user) => String(user.id) === campaignPreviewId) || campaignRecipients[0];
+  const campaignPreview = (text) => text.replace(/\{\{\s*name\s*\}\}/g, () =>
+    campaignPreviewUser?.full_name || "Ім’я користувача"
+  );
 
   return (
     <div className={isCheckoutPage ? "app-shell checkout-shell" : "app-shell"}>
@@ -2994,7 +3027,8 @@ export default function App() {
                       ["users", "Users"],
                       ["roles", "Roles"],
                       ["permissions", "Permissions"],
-                      ["courts", "Courts"]
+                      ["courts", "Courts"],
+                      ["campaigns", "Email кампанії"]
                     ]
                   : []),
                 ["bookings", "Bookings"],
@@ -3473,10 +3507,68 @@ export default function App() {
               </div>
             ) : null}
 
+            {adminTab === "campaigns" && (profile?.role === "admin" || profile?.role === "superuser") ? (
+              <section className="campaign-panel">
+                <h2>Email кампанія</h2>
+                <form className="campaign-form" onSubmit={triggerNotification}>
+                  <fieldset disabled={campaignSending}>
+                    <label>
+                      Одержувачі
+                      <select value={campaign.recipient_scope} onChange={(event) => updateCampaign({ recipient_scope: event.target.value })}>
+                        <option value="active_users">Усі активні користувачі</option>
+                        <option value="all_users">Усі користувачі</option>
+                        <option value="custom_segment">Обрані користувачі</option>
+                      </select>
+                    </label>
+                    {campaign.recipient_scope === "custom_segment" ? (
+                      <div className="campaign-recipient-list" role="group" aria-label="Обери одержувачів">
+                        {adminUsers.map((user) => (
+                          <label key={user.id}>
+                            <input type="checkbox" checked={campaign.recipient_ids.includes(user.id)} onChange={(event) => updateCampaign({
+                              recipient_ids: event.target.checked ? [...campaign.recipient_ids, user.id] : campaign.recipient_ids.filter((id) => id !== user.id)
+                            })} />
+                            {user.full_name}{user.is_active ? "" : " (неактивний)"}
+                          </label>
+                        ))}
+                      </div>
+                    ) : null}
+                    <p>Одержувачів: {campaignRecipients.length}</p>
+                    <label>
+                      Тема листа
+                      <input value={campaign.subject} onChange={(event) => updateCampaign({ subject: event.target.value })} maxLength={200} required />
+                    </label>
+                    <label>
+                      Текст листа
+                      <textarea value={campaign.body} onChange={(event) => updateCampaign({ body: event.target.value })} rows={8} maxLength={20000} required />
+                    </label>
+                    <p>Встав <code>{"{{name}}"}</code> для імені користувача. Підстановка працює у темі й тексті. Лист надсилається як звичайний текст.</p>
+                  </fieldset>
+                  <div className="campaign-preview">
+                    <h3>Попередній перегляд</h3>
+                    <label>
+                      Показати для
+                      <select value={String(campaignPreviewUser?.id || "")} onChange={(event) => setCampaignPreviewId(event.target.value)} disabled={!campaignRecipients.length}>
+                        {!campaignRecipients.length ? <option value="">Немає одержувачів</option> : null}
+                        {campaignRecipients.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}
+                      </select>
+                    </label>
+                    <p><strong>{campaignPreview(campaign.subject) || "Тема листа"}</strong></p>
+                    <div className="campaign-preview-body">{campaignPreview(campaign.body)}</div>
+                  </div>
+                  <button className="primary-button" type="submit" disabled={campaignSending || !campaignRecipients.length || !campaign.subject.trim() || !campaign.body.trim()}>
+                    {campaignSending ? "Надсилання…" : `Надіслати кампанію (${campaignRecipients.length})`}
+                  </button>
+                </form>
+                {campaignResult ? (
+                  <div className={campaignResult.status === "completed" ? "hint success" : "hint warning"} role="status">
+                    Провайдер прийняв листів: {campaignResult.accepted_count} із {campaignResult.recipient_count}.
+                    {campaignResult.status === "completed" ? " Кампанію передано на відправку." : " Статус решти не підтверджено. Не повторюй відправку всієї кампанії: можливі дублікати."}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
             <div className="ops-panel">
-              <button className="secondary-button" onClick={triggerNotification} disabled={!isAuthed}>
-                Email кампанія
-              </button>
               <button className="secondary-button" onClick={triggerReplay} disabled={!isAuthed}>
                 Replay event log
               </button>

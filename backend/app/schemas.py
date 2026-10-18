@@ -246,11 +246,25 @@ class TransferOwnershipRequest(BaseModel):
 
 
 class EmailNotificationRequest(BaseModel):
-    subject: str
-    body: str
+    subject: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=20000)
     recipient_scope: Literal["all_users", "active_users", "custom_segment"] = (
         "active_users"
     )
+    recipient_ids: list[int] = Field(default_factory=list, max_length=1000)
+
+    @field_validator("subject", "body")
+    @classmethod
+    def reject_blank_campaign_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Campaign text cannot be blank")
+        return value
+
+
+class EmailNotificationResponse(Message):
+    recipient_count: int
+    accepted_count: int
+    status: Literal["completed", "partial", "failed"]
 
 
 class BookingReminderRequest(BaseModel):

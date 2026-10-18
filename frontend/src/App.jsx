@@ -3,7 +3,7 @@ import L from "leaflet";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import logoUrl from "../logo.svg";
 import { API_ORIGIN, api, isTokenExpired, onUnauthorized, setAccessToken } from "./api";
-import ReviewComment from "./ReviewComment";
+import ModeratorMessage from "./ModeratorMessage";
 
 const courtVisuals = [
   "linear-gradient(135deg, rgba(199,226,29,.95), rgba(245,245,243,.7)), radial-gradient(circle at 20% 20%, #111 0 2px, transparent 3px)",
@@ -446,6 +446,7 @@ export default function App() {
   const [expandedEndpoint, setExpandedEndpoint] = useState(endpointPermissionCatalog[0]?.endpoint || "");
   const [expandedMethodKey, setExpandedMethodKey] = useState("");
   const [adminBookings, setAdminBookings] = useState([]);
+  const [moderatorMessages, setModeratorMessages] = useState([]);
   const [bookingRemindComments, setBookingRemindComments] = useState({});
   const [dataDeletionRequests, setDataDeletionRequests] = useState([]);
   const [dataDeletionFilter, setDataDeletionFilter] = useState("pending");
@@ -688,7 +689,7 @@ export default function App() {
   }, [view, isAuthed, isManager]);
 
   useEffect(() => {
-    if (profile?.role === "moderator" && adminTab !== "bookings") {
+    if (profile?.role === "moderator" && !["bookings", "moderator-messages"].includes(adminTab)) {
       setAdminTab("bookings");
     }
   }, [profile, adminTab]);
@@ -1233,12 +1234,13 @@ export default function App() {
         ? api.listDataDeletionRequests(dataDeletionFilter).catch(() => [])
         : Promise.resolve([]);
 
-      const [users, loadedRoles, loadedPolicies, allBookings, deletionRequests] = await Promise.all([
+      const [users, loadedRoles, loadedPolicies, allBookings, deletionRequests, messages] = await Promise.all([
         usersPromise,
         rolesPromise,
         policiesPromise,
         bookingsPromise,
-        deletionRequestsPromise
+        deletionRequestsPromise,
+        api.listModeratorMessages()
       ]);
       setAdminUsers(users);
       if (users.length > 0) {
@@ -1258,6 +1260,7 @@ export default function App() {
       setPolicies(loadedPolicies);
       setPermissionDrafts(buildPermissionDraftMap([...new Set([...defaultRoleNames, ...loadedRoles.map((role) => role.name)])], loadedPolicies));
       setAdminBookings(allBookings);
+      setModeratorMessages(messages);
       setDataDeletionRequests(deletionRequests);
       addLog("Loaded admin data", { users, loadedRoles, loadedPolicies, deletionRequests });
     } catch (err) {
@@ -2028,9 +2031,9 @@ export default function App() {
                 <div className="reviews-grid">
                   {courtReviews.length === 0 ? <div className="empty-state">Поки немає відгуків.</div> : null}
                   {courtReviews.map((review) => (
-                    <article className="review-card" key={review.id}>
+                    <article className="review-card" key={review.id} data-author-email={review.author_email}>
                       <strong>{review.rating} ★</strong>
-                      <ReviewComment comment={review.comment} />
+                      <p>{review.comment}</p>
                       <span>{new Date(review.created_at).toLocaleDateString()}</span>
                     </article>
                   ))}
@@ -2576,14 +2579,14 @@ export default function App() {
                         {myReviews.map((review) => {
                           const court = courts.find((item) => item.id === review.court_id);
                           return (
-                            <article className="my-review-card" key={review.id}>
+                            <article className="my-review-card" key={review.id} data-author-email={review.author_email}>
                               <div className="my-review-rating" aria-label={`Rating ${review.rating} out of 5`}>
                                 <strong>{review.rating}</strong>
                                 <span>★</span>
                               </div>
                               <div className="my-review-body">
                                 <h3>{court?.name || review.court_id}</h3>
-                                <ReviewComment comment={review.comment} />
+                                <p>{review.comment}</p>
                                 <span className="muted-pill">{displayLongDate(review.created_at)}</span>
                               </div>
                               <button className="secondary-button compact" type="button" onClick={() => selectCourt(review.court_id)}>
@@ -2820,13 +2823,13 @@ export default function App() {
                         <h3>Останні відгуки про корт</h3>
                         <div className="drawer-review-list">
                           {selectedBooking.reviews.map((review) => (
-                            <article key={review.id} className={`drawer-review ${review.is_mine ? "is-mine" : ""}`}>
+                            <article key={review.id} className={`drawer-review ${review.is_mine ? "is-mine" : ""}`} data-author-email={review.author_email}>
                               <header>
                                 <strong>{review.rating} ★</strong>
                                 <span>{displayLongDate(review.created_at)}</span>
                                 {review.is_mine ? <span className="mine-pill">твій</span> : null}
                               </header>
-                              <ReviewComment comment={review.comment} />
+                              <p>{review.comment}</p>
                             </article>
                           ))}
                         </div>
@@ -2890,6 +2893,7 @@ export default function App() {
                     ]
                   : []),
                 ["bookings", "Bookings"],
+                ["moderator-messages", "Запити до модератора"],
                 ...(profile?.role === "admin" || profile?.role === "superuser"
                   ? [["gdpr", `GDPR${dataDeletionRequests.filter((row) => row.status === "pending").length > 0 ? ` · ${dataDeletionRequests.filter((row) => row.status === "pending").length}` : ""}`]]
                   : [])
@@ -2899,6 +2903,19 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            {adminTab === "moderator-messages" ? (
+              <div className="reviews-grid">
+                {moderatorMessages.length === 0 ? <div className="empty-state">Поки немає запитів.</div> : null}
+                {moderatorMessages.map((message) => (
+                  <article className="review-card" key={message.id}>
+                    <strong>{message.subject}</strong>
+                    <span>{message.author_name} · {displayLongDate(message.created_at)}</span>
+                    <ModeratorMessage message={message.message} />
+                  </article>
+                ))}
+              </div>
+            ) : null}
 
             {adminTab === "users" && (profile?.role === "admin" || profile?.role === "superuser") ? (
               <div className="admin-panel-grid courts-admin-layout">

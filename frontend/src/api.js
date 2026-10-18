@@ -180,6 +180,7 @@ export const api = {
   sendNotification: (payload) =>
     request("/dashboard/notifications/email", { method: "POST", body: JSON.stringify(payload) }),
   listDashboardBookings: () => request("/dashboard/bookings"),
+  listModeratorMessages: () => request("/dashboard/moderator-messages"),
   remindBooking: (bookingId, payload) =>
     request(`/dashboard/bookings/${bookingId}/remind`, { method: "POST", body: JSON.stringify(payload || {}) }),
   replayEventLog: () => request("/admin/event-log/replay", { method: "POST", body: "{}" }),

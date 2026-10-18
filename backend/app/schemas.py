@@ -226,6 +226,7 @@ class ReviewResponse(BaseModel):
 
     id: int
     user_id: int
+    author_email: str
     court_id: str
     booking_id: str | None = None
     rating: int

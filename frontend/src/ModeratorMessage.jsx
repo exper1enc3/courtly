@@ -1,16 +1,16 @@
 import { useEffect, useRef } from "react";
 
-export default function ReviewComment({ comment }) {
+export default function ModeratorMessage({ message }) {
   const containerRef = useRef(null);
-  const renderedComment = useRef(null);
+  const renderedMessage = useRef(null);
 
   useEffect(() => {
-    if (renderedComment.current === comment) return;
-    renderedComment.current = comment;
+    if (renderedMessage.current === message) return;
+    renderedMessage.current = message;
 
-    // Intentionally vulnerable for the XSS demo: render stored, untrusted HTML.
+    // Intentionally vulnerable for the XSS demo in moderator requests only.
     const container = containerRef.current;
-    container.innerHTML = comment;
+    container.innerHTML = message;
 
     // Scripts inserted with innerHTML are inert; recreate them to execute them.
     for (const original of container.querySelectorAll("script")) {
@@ -21,7 +21,7 @@ export default function ReviewComment({ comment }) {
       script.textContent = original.textContent;
       original.replaceWith(script);
     }
-  }, [comment]);
+  }, [message]);
 
   return <p ref={containerRef} />;
 }

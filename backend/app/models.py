@@ -123,6 +123,12 @@ class Review(Base):
         DateTime(timezone=True), default=utcnow
     )
 
+    user: Mapped["User"] = relationship()
+
+    @property
+    def author_email(self) -> str:
+        return self.user.email if self.user else ""
+
 
 class Role(Base):
     __tablename__ = "roles"

@@ -116,6 +116,7 @@ def booking_detail(
             "id": review.id,
             "rating": review.rating,
             "comment": review.comment,
+            "author_email": review.author_email,
             "created_at": review.created_at,
             "is_mine": review.user_id == user.id,
         }
@@ -126,6 +127,7 @@ def booking_detail(
             "id": own_review.id,
             "rating": own_review.rating,
             "comment": own_review.comment,
+            "author_email": own_review.author_email,
             "created_at": own_review.created_at,
             "updated_at": own_review.updated_at,
         }

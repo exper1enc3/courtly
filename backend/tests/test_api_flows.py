@@ -193,6 +193,15 @@ def test_core_flow_create_court_hold_confirm_cancel() -> None:
             },
         )
         assert review.status_code == 201, review.text
+        assert review.json()["author_email"] == "superuser@courtly.example.com"
+        for path in ("/api/me/reviews", f"/api/me/reviews/public/{court_id}"):
+            reviews = client.get(path, headers=headers)
+            assert reviews.status_code == 200, reviews.text
+            saved = next(row for row in reviews.json() if row["id"] == review.json()["id"])
+            assert saved["author_email"] == "superuser@courtly.example.com"
+        detail = client.get(f"/api/me/bookings/{booking_id}", headers=headers).json()
+        assert detail["reviews"][0]["author_email"] == "superuser@courtly.example.com"
+        assert detail["my_review"]["author_email"] == "superuser@courtly.example.com"
         duplicate_review = client.post(
             "/api/me/reviews",
             headers=headers,
@@ -216,6 +225,44 @@ def test_core_flow_create_court_hold_confirm_cancel() -> None:
             },
         )
         assert moderator_message.status_code == 200, moderator_message.text
+
+
+def test_moderator_inbox_preserves_payload_and_requires_manager() -> None:
+    from app.database import SessionLocal
+    from app.models import User
+    from app.security import create_token
+
+    with TestClient(app) as client:
+        headers = _auth_headers(client)
+        subject = f"XSS demo {uuid4().hex}"
+        payload = "<script>alert('XSS demo')</script>"
+        response = client.post(
+            "/api/me/moderator-message",
+            headers=headers,
+            json={"subject": subject, "message": payload},
+        )
+        assert response.status_code == 200, response.text
+        inbox = client.get("/api/dashboard/moderator-messages", headers=headers)
+        assert inbox.status_code == 200, inbox.text
+        assert inbox.json()[0]["subject"] == subject
+        assert inbox.json()[0]["message"] == payload
+        assert client.get("/api/dashboard/moderator-messages").status_code == 401
+
+        with SessionLocal() as db:
+            user = User(
+                email=f"inbox-{uuid4().hex}@example.com",
+                full_name="Inbox user",
+                password_hash="unused",
+                role="user",
+            )
+            db.add(user)
+            db.commit()
+            token = create_token(str(user.id), "access", 5, extra={"uid": user.id})
+            user_headers = {"Authorization": f"Bearer {token}"}
+            assert client.get("/api/dashboard/moderator-messages", headers=user_headers).status_code == 403
+            user.role = "moderator"
+            db.commit()
+            assert client.get("/api/dashboard/moderator-messages", headers=user_headers).status_code == 200
 
 
 def test_admin_dashboard_crud_endpoints_support_ui() -> None:

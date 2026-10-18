@@ -47,23 +47,26 @@ VITE_API_BASE=http://localhost:8000/api npm run dev
 
 ## Stored XSS Demo
 
-Booking review comments always render HTML and execute JavaScript for the demo.
-Start the frontend normally; no environment flag is required:
+Requests sent through "Написати модератору" intentionally render HTML and execute
+JavaScript when a moderator, admin, or superuser opens the dashboard tab
+"Запити до модератора". The inbox shows the latest 100 messages from existing
+users, persisted in the event log. No environment flag is required:
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Open a booking in the cabinet, publish a review containing
-`<script>alert('XSS demo')</script>`, and view the saved review. The payload
-executes wherever that review is displayed: booking details, your reviews,
-and the public court page, including for other viewers.
+Open a booking in the cabinet, send a moderator request containing
+`<script>alert('XSS demo')</script>`, then open the moderator inbox in the dashboard.
 HTML event handlers such as `<img src=x onerror="alert('XSS demo')">` also execute.
 Plain JavaScript without HTML tags remains text.
 
-This deliberately allows stored comments to run with the viewer's page privileges
-in both development and production builds.
+This deliberately allows stored moderator requests to run with the viewer's page
+privileges in both development and production builds. Review comments are escaped
+text and do not execute JavaScript. All review cards include the author's email
+in a `data-author-email` HTML attribute, accessible in the DOM but not shown in
+the UI. Public review responses include this email as well.
 
 ## Azure CI/CD
 

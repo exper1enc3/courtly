@@ -1,3 +1,6 @@
+import json
+from collections import deque
+
 import resend
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -27,6 +30,32 @@ def _manager_only(user: User) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role"
         )
+
+
+@router.get("/moderator-messages", response_model=list[dict])
+def list_moderator_messages(
+    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> list[dict]:
+    _manager_only(user)
+    messages = deque(maxlen=100)
+    with event_logger.path.open(encoding="utf-8") as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            event = json.loads(line)
+            if event["event_type"] != "moderator.message_sent":
+                continue
+            author = db.get(User, event["actor_id"])
+            if author is None:
+                continue
+            messages.append({
+                "id": event["event_id"],
+                "created_at": event["created_at"],
+                "author_name": author.full_name,
+                "subject": event["payload"]["subject"],
+                "message": event["payload"]["message"],
+            })
+    return list(reversed(messages))
 
 
 @router.post("/courts/{court_id}/transfer-ownership", response_model=Message)

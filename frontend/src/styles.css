@@ -504,6 +504,17 @@ select:focus {
   justify-content: center;
 }
 
+.landing-service-notice {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+  background: rgba(244, 183, 64, 0.16);
+  color: #795000;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .eyebrow {
   display: inline-flex;
   width: fit-content;

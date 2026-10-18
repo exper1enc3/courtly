@@ -1862,6 +1862,9 @@ export default function App() {
         {view === "home" ? (
           <section className="hero-section">
             <div className="hero-content">
+              <div className="landing-service-notice" role="status">
+                Techincal Issues, Court booking isn't available right now
+              </div>
               <h1 className="hero-title" style={{ fontSize: "10vw", minWidth: "100%", position: "relative", top: "0", left: "0" }}>FIND YOUR COURT</h1>
 
               <div className="search-panel">

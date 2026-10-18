@@ -2157,7 +2157,6 @@ export default function App() {
               <div><span>Тривалість</span><strong>{bookingDurationMinutes(checkoutHold.starts_at, checkoutHold.ends_at)} хв</strong></div>
               <div><span>До сплати</span><strong>{formatMoney(checkoutHold.total_price)}</strong></div>
             </div>
-            <p className="hint warning">Демооплата: введи будь-які тестові реквізити. Навіть порожні або невалідні дані приймаються. Кошти не списуються.</p>
             <p>Слоти утримуються 5 хвилин. Заверши оформлення до {displayTime(checkoutHold.held_until)}.</p>
             <form className="checkout-payment-form" noValidate autoComplete="off" onSubmit={(event) => {
               event.preventDefault();
@@ -2184,7 +2183,6 @@ export default function App() {
                   </label>
                 </div>
               </fieldset>
-              <p className="checkout-payment-note">Використовуй вигадані дані. Реквізити не зберігаються й не надсилаються на сервер.</p>
               <button className="primary-button full" type="submit" disabled={checkoutBusy}>
                 {checkoutBusy ? "Обробляємо…" : `Оплатити ${formatMoney(checkoutHold.total_price)} (демо)`}
               </button>

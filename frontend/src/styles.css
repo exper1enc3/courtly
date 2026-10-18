@@ -1160,11 +1160,6 @@ label span,
   gap: var(--space-4);
 }
 
-.checkout-payment-note {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
 .summary-list {
   display: grid;
   gap: var(--space-3);

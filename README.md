@@ -6,6 +6,12 @@ This repository now includes a full-stack baseline implementation derived from `
 - Frontend: React + Vite test UI for auth/discovery/booking/cabinet flows.
 - Tests: API integration tests for health and core booking lifecycle.
 
+Booking checkout holds the selected slots for five minutes, then opens a dedicated
+checkout page without site navigation. `POST /api/bookings/checkout` accepts a
+`hold_token`, approves the placeholder payment, and confirms the booking. No card
+details or payment service are used and no money is charged. Existing booking
+permissions, expiry, and availability checks still apply.
+
 ## Structure
 
 - `backend/app/main.py` - API bootstrap and startup seed.

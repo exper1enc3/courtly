@@ -428,6 +428,10 @@ export default function App() {
   const [courtBookings, setCourtBookings] = useState([]);
   const [courtReviews, setCourtReviews] = useState([]);
   const [selectedSlots, setSelectedSlots] = useState([]);
+  const [checkoutHold, setCheckoutHold] = useState(null);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const checkoutInFlight = useRef(false);
+  const [completedCheckout, setCompletedCheckout] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [myReviews, setMyReviews] = useState([]);
   const [cabinetTab, setCabinetTab] = useState("bookings");
@@ -647,6 +651,8 @@ export default function App() {
       localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
       setAccessToken("");
       setToken("");
+      setCheckoutHold(null);
+      setCompletedCheckout(null);
       setProfile(null);
       setProfileDraft(null);
       setBookings([]);
@@ -856,6 +862,8 @@ export default function App() {
       return;
     }
     setToken("");
+    setCheckoutHold(null);
+    setCompletedCheckout(null);
     localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     setProfile(null);
     setProfileDraft(null);
@@ -1192,7 +1200,8 @@ export default function App() {
     setView("detail");
   }
 
-  async function holdAndConfirm() {
+  async function startCheckout() {
+    if (checkoutInFlight.current) return;
     setError("");
     setSuccess("");
     if (!isAuthed) {
@@ -1208,17 +1217,62 @@ export default function App() {
       setError("Обери мінімум два суміжні 30-хвилинні слоти.");
       return;
     }
+    checkoutInFlight.current = true;
+    setCheckoutBusy(true);
     try {
+      if (checkoutHold) {
+        await api.cancelBooking(checkoutHold.id, { reason: "Changed checkout selection" });
+        setCheckoutHold(null);
+      }
       const slotStarts = selectedSlots.map((slot) => slot.starts_at);
       const hold = await api.holdBooking({ court_id: activeCourt.id, slot_starts: slotStarts });
-      const confirmed = await api.confirmBooking({ hold_token: hold.hold_token });
-      addLog("Hold+Confirm", { hold, confirmed });
-      setSuccess("Корт заброньовано. Деталі вже у твоєму кабінеті.");
-      setView("success");
-      await loadCabinet();
-      await loadAvailability(activeCourt.id, weekStart);
+      setCheckoutHold({ ...hold, court_name: activeCourt.name, court_address: activeCourt.address });
+      setView("checkout");
     } catch (err) {
       setError(err.message);
+    } finally {
+      checkoutInFlight.current = false;
+      setCheckoutBusy(false);
+    }
+  }
+
+  async function finishCheckout() {
+    if (!checkoutHold || checkoutInFlight.current) return;
+    checkoutInFlight.current = true;
+    setCheckoutBusy(true);
+    setError("");
+    try {
+      const result = await api.checkout({ hold_token: checkoutHold.hold_token });
+      setCompletedCheckout({ ...result.booking, court_name: checkoutHold.court_name });
+      setCheckoutHold(null);
+      setSuccess("Демооплату схвалено. Корт заброньовано.");
+      setView("success");
+      await loadCabinet();
+      await loadAvailability(result.booking.court_id, weekStart);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      checkoutInFlight.current = false;
+      setCheckoutBusy(false);
+    }
+  }
+
+  async function leaveCheckout() {
+    if (!checkoutHold || checkoutInFlight.current) return;
+    checkoutInFlight.current = true;
+    setCheckoutBusy(true);
+    setError("");
+    try {
+      await api.cancelBooking(checkoutHold.id, { reason: "Returned from checkout" });
+      setActiveCourtId(checkoutHold.court_id);
+      setCheckoutHold(null);
+      setView("detail");
+      await loadAvailability(checkoutHold.court_id, weekStart);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      checkoutInFlight.current = false;
+      setCheckoutBusy(false);
     }
   }
 
@@ -1676,8 +1730,11 @@ export default function App() {
     );
   }
 
+  const isCheckoutPage = view === "checkout" || view === "success";
+
   return (
-    <div className="app-shell">
+    <div className={isCheckoutPage ? "app-shell checkout-shell" : "app-shell"}>
+      {!isCheckoutPage ? <>
       <header className="topbar">
         <div onClick={() => navigateTo("home")}>
           <Logo />
@@ -1766,8 +1823,9 @@ export default function App() {
           ) : null}
         </div>
       </aside>
+      </> : null}
 
-      <main>
+      <main className={isCheckoutPage ? "checkout-main" : undefined}>
         {view === "home" ? (
           <section className="hero-section">
             <div className="hero-content">
@@ -2067,8 +2125,8 @@ export default function App() {
                 </div>
               </div>
               <p className={canConfirmSelection ? "hint success" : "hint warning"}>{slotHint}</p>
-              <button className="primary-button full" onClick={holdAndConfirm} disabled={selectedSlots.length > 0 && !canConfirmSelection}>
-                {isAuthed ? "Підтвердити бронювання" : "Увійти і забронювати"}
+              <button className="primary-button full" onClick={startCheckout} disabled={checkoutBusy || (selectedSlots.length > 0 && !canConfirmSelection)}>
+                {checkoutBusy ? "Готуємо оплату…" : isAuthed ? "Перейти до оплати" : "Увійти і забронювати"}
               </button>
               <button className="secondary-button full" onClick={() => toggleFavorite(activeCourt.id)}>
                 {favorites.includes(activeCourt.id) ? "Прибрати з обраного" : "Додати в обране"}
@@ -2087,15 +2145,36 @@ export default function App() {
           </section>
         ) : null}
 
-        {view === "success" ? (
+        {view === "checkout" && checkoutHold ? (
+          <section className="checkout-panel booking-summary">
+            <span className="eyebrow dark">Оформлення бронювання</span>
+            <h1>Оплата</h1>
+            <h2>{checkoutHold.court_name}</h2>
+            <p>{checkoutHold.court_address}</p>
+            <div className="summary-list">
+              <div><span>Дата</span><strong>{displayLongDate(checkoutHold.starts_at)}</strong></div>
+              <div><span>Час</span><strong>{displayTime(checkoutHold.starts_at)} – {displayTime(checkoutHold.ends_at)}</strong></div>
+              <div><span>Тривалість</span><strong>{bookingDurationMinutes(checkoutHold.starts_at, checkoutHold.ends_at)} хв</strong></div>
+              <div><span>До сплати</span><strong>{formatMoney(checkoutHold.total_price)}</strong></div>
+            </div>
+            <p className="hint warning">Демооплата: кожен платіж автоматично схвалюється. Кошти не списуються, дані картки не потрібні.</p>
+            <p>Слоти утримуються 5 хвилин. Заверши оформлення до {displayTime(checkoutHold.held_until)}.</p>
+            <button className="primary-button full" onClick={finishCheckout} disabled={checkoutBusy}>
+              {checkoutBusy ? "Обробляємо…" : `Оплатити ${formatMoney(checkoutHold.total_price)} (демо)`}
+            </button>
+            <button className="secondary-button full" onClick={leaveCheckout} disabled={checkoutBusy}>Повернутися до вибору часу</button>
+          </section>
+        ) : null}
+
+        {view === "success" && completedCheckout ? (
           <section className="success-state">
             <div className="success-illustration">Booked</div>
             <h1>Корт заброньовано</h1>
             <p>
-              {activeCourt?.name}, {selectedSlots[0] ? displayDate(selectedSlots[0].starts_at) : ""},{" "}
-              {selectedSlots[0] ? displayTime(selectedSlots[0].starts_at) : ""} -{" "}
-              {selectedSlots.length > 0 ? displayTime(addMinutes(new Date(selectedSlots[selectedSlots.length - 1].starts_at), 30)) : ""}
+              {completedCheckout.court_name}, {displayDate(completedCheckout.starts_at)},{" "}
+              {displayTime(completedCheckout.starts_at)} – {displayTime(completedCheckout.ends_at)}
             </p>
+            <p>Демооплату {formatMoney(completedCheckout.total_price)} схвалено. Кошти не списано.</p>
             <div className="row-actions centered">
               <button className="primary-button" onClick={() => setView("cabinet")}>
                 Переглянути мої бронювання

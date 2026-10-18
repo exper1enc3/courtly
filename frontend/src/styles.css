@@ -1118,6 +1118,17 @@ label span,
   margin-top: var(--space-3);
 }
 
+.checkout-panel {
+  position: static;
+  width: min(620px, calc(100% - 32px));
+  margin: var(--space-12) auto;
+}
+
+.checkout-main {
+  min-height: 100dvh;
+  display: flow-root;
+}
+
 .summary-list {
   display: grid;
   gap: var(--space-3);

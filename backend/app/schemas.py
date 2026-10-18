@@ -171,6 +171,12 @@ class BookingHoldResponse(BookingResponse):
     pass
 
 
+class CheckoutResponse(BaseModel):
+    booking: BookingResponse
+    payment_status: Literal["approved"] = "approved"
+    payment_provider: Literal["placeholder"] = "placeholder"
+
+
 class ProfileSelf(BaseModel):
     id: int
     email: EmailStr

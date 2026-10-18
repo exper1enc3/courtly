@@ -11,7 +11,7 @@ from app.deps import get_current_user
 from app.event_log import EventLogger
 from app.event_snapshots import booking_dict
 from app.models import Booking, Court, User
-from app.schemas import BookingCancelRequest, BookingConfirmRequest, BookingHoldRequest, BookingHoldResponse, BookingResponse
+from app.schemas import BookingCancelRequest, BookingConfirmRequest, BookingHoldRequest, BookingHoldResponse, BookingResponse, CheckoutResponse
 
 router = APIRouter(prefix="/api/bookings")
 event_logger = EventLogger()
@@ -118,6 +118,15 @@ def confirm_hold(
     db.refresh(booking)
     event_logger.append("booking.confirmed", user.id, {"booking": booking_dict(booking)})
     return booking
+
+
+@router.post("/checkout", response_model=CheckoutResponse)
+def checkout(
+    payload: BookingConfirmRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> CheckoutResponse:
+    """Approve the demo payment and confirm the hold without charging money."""
+    booking = confirm_hold(payload, user, db)
+    return CheckoutResponse(booking=BookingResponse.model_validate(booking))
 
 
 @router.post("/{booking_id}/cancel", response_model=BookingResponse)

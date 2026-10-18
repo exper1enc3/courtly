@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -132,7 +133,8 @@ def test_superuser_login_requires_mfa() -> None:
         assert verify.json()["access_token"]
 
 
-def test_core_flow_create_court_hold_confirm_cancel() -> None:
+@pytest.mark.parametrize("confirmation_path", ["/api/bookings/confirm", "/api/bookings/checkout"])
+def test_core_flow_create_court_hold_confirm_cancel(confirmation_path: str) -> None:
     with TestClient(app) as client:
         headers = _auth_headers(client)
         create_court = client.post(
@@ -164,11 +166,22 @@ def test_core_flow_create_court_hold_confirm_cancel() -> None:
         hold_token = hold.json()["hold_token"]
 
         confirm = client.post(
-            "/api/bookings/confirm", headers=headers, json={"hold_token": hold_token}
+            confirmation_path, headers=headers, json={"hold_token": hold_token}
         )
         assert confirm.status_code == 200, confirm.text
-        booking_id = confirm.json()["id"]
-        assert confirm.json()["status"] == "confirmed"
+        if confirmation_path.endswith("checkout"):
+            assert confirm.json()["payment_status"] == "approved"
+            assert confirm.json()["payment_provider"] == "placeholder"
+            confirmed_booking = confirm.json()["booking"]
+            repeated = client.post(confirmation_path, headers=headers, json={"hold_token": hold_token})
+            assert repeated.status_code == 404
+        else:
+            confirmed_booking = confirm.json()
+        booking_id = confirmed_booking["id"]
+        assert confirmed_booking["status"] == "confirmed"
+        assert confirmed_booking["total_price"] == 800
+        assert confirmed_booking["hold_token"] is None
+        assert confirmed_booking["held_until"] is None
 
         cancel = client.post(
             f"/api/bookings/{booking_id}/cancel",

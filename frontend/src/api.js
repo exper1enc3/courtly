@@ -147,6 +147,7 @@ export const api = {
   listCourtBookings: (courtId) => request(`/courts/${courtId}/bookings`, { headers: { Authorization: "" } }),
   holdBooking: (payload) => request("/bookings/hold", { method: "POST", body: JSON.stringify(payload) }),
   confirmBooking: (payload) => request("/bookings/confirm", { method: "POST", body: JSON.stringify(payload) }),
+  checkout: (payload) => request("/bookings/checkout", { method: "POST", body: JSON.stringify(payload) }),
   cancelBooking: (bookingId, payload) =>
     request(`/bookings/${bookingId}/cancel`, { method: "POST", body: JSON.stringify(payload) }),
   listMyBookings: () => request("/me/bookings"),

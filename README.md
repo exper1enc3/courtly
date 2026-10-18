@@ -45,6 +45,23 @@ Optional API base override:
 VITE_API_BASE=http://localhost:8000/api npm run dev
 ```
 
+## Azure CI/CD
+
+Pushing to `main` runs two GitHub Actions workflows:
+
+- `Deploy backend to Azure` packages `backend/` and deploys to the Python 3.11 App Service `courtlyback`, then checks `/api/health`.
+- `Deploy frontend to Azure` builds with Node.js 22 and deploys `frontend/dist` to Static Web App `courtlyfront` at https://courtly.click.
+
+Both workflows can also be started manually from GitHub Actions using **Run workflow**. Deployments for each app run sequentially. Other branches do not deploy to production.
+
+Backend authentication uses the existing Azure managed identity and OIDC, restricted to `exper1enc3/courtly` on `main`, with Website Contributor access only to `courtlyback`. The frontend uses repository secret `AZURE_STATIC_WEB_APPS_API_TOKEN_ICY_RIVER_09D809C0F`.
+
+The frontend build sets `VITE_API_BASE` to `https://courtlyback-cfgaheagazd8f9gk.canadacentral-01.azurewebsites.net/api`. This is a public URL, not a credential.
+
+Backend App Service settings configure `COURTLY_CORS_ORIGINS` (a JSON array), `COURTLY_DATABASE_URL`, `COURTLY_EVENT_LOG_PATH`, `COURTLY_UPLOADS_DIR`, `COURTLY_JWT_SECRET`, and `COURTLY_ENCRYPTION_KEK_B64`. Data lives under `/home/courtly`, outside deployment files. Keep the encryption key stable to retain access to encrypted profile data. Application secrets stay in Azure settings.
+
+To redeploy an older release, revert the relevant commit on `main` and push. This redeploys code; it does not reverse database changes.
+
 ## Tests
 
 ```bash

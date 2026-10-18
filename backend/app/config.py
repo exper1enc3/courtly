@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./courtly.db"
     event_log_path: Path = Path("./event_log.jsonl")
+    uploads_dir: Path = Path(__file__).resolve().parent.parent / "uploads"
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     jwt_secret: str = Field(default_factory=lambda: token_bytes(32).hex())
     jwt_algorithm: str = "HS256"

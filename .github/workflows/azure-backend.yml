@@ -1,0 +1,42 @@
+name: Deploy backend to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: courtlyback-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package backend
+        run: |
+          cd backend
+          zip -r ../backend.zip app requirements.txt startup.sh
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: e718d8f3-86bd-43cb-8dfb-372ac267c25c
+          tenant-id: 70a28522-969b-451f-bdb2-abfea3aaa5bf
+          subscription-id: 409d36c8-851a-4419-904c-6dab5c1c9ffa
+      - name: Deploy App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: courtlyback
+          package: backend.zip
+          startup-command: sh startup.sh
+      - name: Check deployed API
+        run: |
+          curl --fail --silent --show-error --retry 18 --retry-delay 10 --retry-all-errors --max-time 30 \
+            https://courtlyback-cfgaheagazd8f9gk.canadacentral-01.azurewebsites.net/api/health

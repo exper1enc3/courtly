@@ -7,6 +7,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.authz import enforce_policy
+from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.event_log import EventLogger
@@ -16,7 +17,7 @@ from app.schemas import AvailabilitySlot, CourtCreate, CourtResponse, CourtUpdat
 
 router = APIRouter(prefix="/api/courts")
 event_logger = EventLogger()
-court_upload_dir = Path(__file__).resolve().parent.parent.parent / "uploads" / "courts"
+court_upload_dir = get_settings().uploads_dir / "courts"
 
 
 def _naive(dt: datetime) -> datetime:

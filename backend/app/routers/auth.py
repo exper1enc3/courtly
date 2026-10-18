@@ -30,6 +30,14 @@ from app.security import create_token, decode_token, hash_password, verify_passw
 router = APIRouter(prefix="/api/auth")
 settings = get_settings()
 event_logger = EventLogger()
+DEFAULT_ADMIN_DEMO_CODE = "123456"
+
+
+def _uses_admin_demo_code(user: User) -> bool:
+    return (
+        user.email == settings.superuser_email
+        and user.role in {"admin", "superuser"}
+    )
 
 
 def _token_pair(user: User) -> TokenPair:
@@ -107,7 +115,8 @@ def _send_email_verification_code(email: str, code: str) -> None:
 
 
 def _issue_email_verification_challenge(user: User) -> LoginResponse:
-    code = str(secrets.randbelow(900000) + 100000)
+    admin_demo = _uses_admin_demo_code(user)
+    code = DEFAULT_ADMIN_DEMO_CODE if admin_demo else str(secrets.randbelow(900000) + 100000)
     code_hash = _mfa_code_hash(user.id, code)
     challenge = create_token(
         str(user.id),
@@ -116,7 +125,8 @@ def _issue_email_verification_challenge(user: User) -> LoginResponse:
         extra={"uid": user.id, "code_hash": code_hash},
     )
     try:
-        _send_email_verification_code(user.email, code)
+        if not admin_demo:
+            _send_email_verification_code(user.email, code)
     except Exception as exc:
         if isinstance(exc, HTTPException):
             raise
@@ -134,7 +144,7 @@ def _issue_email_verification_challenge(user: User) -> LoginResponse:
         email_verification_required=True,
         email_verification_challenge_token=challenge,
         email_verification_dev_code=code
-        if settings.app_env in {"dev", "test"}
+        if admin_demo or settings.app_env in {"dev", "test"}
         else None,
     )
 
@@ -149,7 +159,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse
     if not user.email_verified:
         return _issue_email_verification_challenge(user)
     if user.role in {"admin", "superuser"} or user.mfa_enabled:
-        code = str(secrets.randbelow(900000) + 100000)
+        admin_demo = _uses_admin_demo_code(user)
+        code = DEFAULT_ADMIN_DEMO_CODE if admin_demo else str(secrets.randbelow(900000) + 100000)
         code_hash = _mfa_code_hash(user.id, code)
         challenge = create_token(
             str(user.id),
@@ -158,7 +169,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse
             extra={"uid": user.id, "code_hash": code_hash},
         )
         try:
-            _send_mfa_code(user.email, code)
+            if not admin_demo:
+                _send_mfa_code(user.email, code)
         except Exception as exc:
             if isinstance(exc, HTTPException):
                 raise
@@ -175,7 +187,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse
         return LoginResponse(
             mfa_required=True,
             mfa_challenge_token=challenge,
-            mfa_dev_code=code if settings.app_env in {"dev", "test"} else None,
+            mfa_dev_code=code if admin_demo or settings.app_env in {"dev", "test"} else None,
         )
     event_logger.append("auth.login", user.id, {"email": user.email})
     pair = _token_pair(user)

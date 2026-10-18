@@ -31,6 +31,11 @@ Default seeded superuser:
 - email: `superuser@courtly.example.com`
 - password: `ChangeMeNow123!`
 
+The configured default superuser uses the fixed demo email code `123456` for
+email verification and login MFA in all environments, including production.
+No verification email is sent for this account; the UI shows the demo code.
+The password and a valid, unexpired challenge token are still required.
+
 ## Frontend Run
 
 ```bash

@@ -8,8 +8,10 @@ This repository now includes a full-stack baseline implementation derived from `
 
 Booking checkout holds the selected slots for five minutes, then opens a dedicated
 checkout page without site navigation. `POST /api/bookings/checkout` accepts a
-`hold_token`, approves the placeholder payment, and confirms the booking. No card
-details or payment service are used and no money is charged. Existing booking
+`hold_token`, approves the placeholder payment, and confirms the booking. The card
+fields accept any test values, including invalid or empty input; their contents
+are neither stored nor sent to the API. No payment service is used and no money
+is charged. A successful checkout shows an explicit payment success screen. Existing booking
 permissions, expiry, and availability checks still apply.
 
 ## Structure
